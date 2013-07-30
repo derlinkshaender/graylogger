@@ -6,7 +6,8 @@ import os
 import logging
 import argparse
 import graypy
-
+import json
+from fmtparser import parse_log_string
 
 def bailout(msg):
     sys.stderr.write(msg + '\n')
@@ -23,6 +24,8 @@ def check_args():
     cmdline_options = { "facility": "PythonLogger",
                         "version": "1.0",
                         "level": 1,
+                        "nolog": False,
+                        "template": None,
                         "message": None,
                         "server": None,
                         "data": None,
@@ -35,8 +38,10 @@ def check_args():
     parser.add_argument("message", help="message being sent or @FILENAME to read from FILENAME or - to read from StdIn")
     parser.add_argument("-l", "--level", help="log level (defaults to ALERT)", choices=loglevels)
     parser.add_argument("-f", "--facility", help="facility name (defaults to 'PythonLogger')")
-    parser.add_argument("-p", "" "--port", help="graylog port (defaults to 12201)", type=int)
-    parser.add_argument("-d", "" "--data", help="additional data field (key:value)", action="append")
+    parser.add_argument("-p", "--port", help="graylog port (defaults to 12201)", type=int)
+    parser.add_argument("-d", "--data", help="additional data field (key:value)", action="append")
+    parser.add_argument("-t", "--template", help="specify template to parse log message", type=str)
+    parser.add_argument("-n", "--nolog", help="do not log, simulate and show on console", action="store_true")
     args = parser.parse_args()
 
     cmdline_options['server'] = args.server
@@ -66,13 +71,21 @@ def check_args():
     if args.facility is not None:
         cmdline_options['facility'] = args.facility
 
+    # process template option
+    if args.template is not None:
+        cmdline_options['template'] = args.template
+
+    # process simulation option
+    if args.nolog is not None:
+        cmdline_options['nolog'] = True
+
     # set the level
     if args.level is not None:
         cmdline_options['level'] = loglevels[args.level.upper()]
 
     # process additional data fields, if present
+    cmdline_options['data'] = {}
     if args.data is not None:
-        cmdline_options['data'] = {}
         for entry in args.data:
             entry = entry.strip().split(':')
             key = entry[0]
@@ -90,7 +103,20 @@ def main():
         handler = graypy.GELFHandler(args['server'], args['port'], debugging_fields=False)
         my_logger.addHandler(handler)
         d = args['data']
-        my_logger.log(args['level'], args['message'], extra=d)
+
+        if args['template'] is not None:
+            parsing = parse_log_string(args['template'], args['message'])
+            d.update(parsing)
+
+        if args['nolog'] is True:
+            print(u'Simulation mode:')
+            print(u'Log level: {0}'.format(args['level']))
+            print(u'Facility: {0}'.format(args['facility']))
+            print(u'Server: {0}'.format(args['server']))
+            print(u'Message: {0}'.format(args['message']))
+            print(u'Custom fields: {0}'.format(json.dumps(d)))
+        else:
+            my_logger.log(args['level'], args['message'], extra=d)
     except Exception as e:
        bailout("Exception during log operation: {0}".format(e))
 
