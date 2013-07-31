@@ -75,8 +75,7 @@ def check_args():
         cmdline_options['template'] = args.template
 
     # process simulation option
-    if args.nolog is not None:
-        cmdline_options['nolog'] = True
+    cmdline_options['nolog'] = args.nolog
 
     # set the level
     if args.level is not None:
