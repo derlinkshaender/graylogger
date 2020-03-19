@@ -41,6 +41,8 @@ def check_args():
     parser.add_argument("-d", "--data", help="additional data field (key:value)", action="append")
     parser.add_argument("-t", "--template", help="specify template to parse log message", type=str)
     parser.add_argument("-n", "--nolog", help="do not log, simulate and show on console", action="store_true")
+    parser.add_argument("--file", help="file name to be logged", type=str, default=os.path.basename(sys.argv[0]))
+    parser.add_argument("--logfile", help="app log file name to be logged", type=str, default="")
     args = parser.parse_args()
 
     cmdline_options['server'] = args.server
@@ -90,6 +92,9 @@ def check_args():
             value = ''.join(entry[1:])
             cmdline_options['data'][key] = value
 
+    cmdline_options['appfilename'] = args.file
+    cmdline_options['logfilename'] = args.logfile
+
     return cmdline_options
 
 
@@ -137,13 +142,21 @@ def parse_log_string(format_description, input_string):
     return result
 
 
+def filter(log_record : logging.LogRecord) -> bool:
+    log_record.logfile = args['logfilename']
+    log_record.file = args['appfilename']
+    return True
+
+
+args = check_args()
+
 def main():
     try:
-        args = check_args()
         my_logger = logging.getLogger(args['facility'])
         my_logger.setLevel(args['level'])
-        handler = graypy.GELFHandler(args['server'], args['port'], debugging_fields=False)
+        handler = graypy.GELFUDPHandler(args['server'], args['port'], debugging_fields=False)
         my_logger.addHandler(handler)
+        my_logger.addFilter(filter)
         d = args['data']
 
         if args['template'] is not None:
@@ -151,12 +164,12 @@ def main():
             d.update(parsing)
 
         if args['nolog'] is True:
-            print(u'Simulation mode:')
-            print(u'Log level: {0}'.format(args['level']))
-            print(u'Facility: {0}'.format(args['facility']))
-            print(u'Server: {0}'.format(args['server']))
-            print(u'Message: {0}'.format(args['message']))
-            print(u'Custom fields: {0}'.format(json.dumps(d)))
+            print('Simulation mode:')
+            print('Log level: {0}'.format(args['level']))
+            print('Facility: {0}'.format(args['facility']))
+            print('Server: {0}'.format(args['server']))
+            print('Message: {0}'.format(args['message']))
+            print('Custom fields: {0}'.format(json.dumps(d)))
         else:
             my_logger.log(args['level'], args['message'], extra=d)
     except Exception as e:
